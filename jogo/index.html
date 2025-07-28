@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snake2Play</title>
+  <style>
+    :root {
+      --bg: #111;
+      --text: #fff;
+      --snake: #4caf50;
+      --food: red;
+      --border: #4caf50;
+      --button: #4caf50;
+    }
+
+    .light-mode {
+      --bg: #f0f0f0;
+      --text: #111;
+      --snake: #2e7d32;
+      --food: #d32f2f;
+      --border: #2e7d32;
+      --button: #2e7d32;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+    }
+
+    h1 {
+      margin-top: 20px;
+    }
+
+    #menu {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #gameContainer {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    canvas {
+      background: #222;
+      border: 2px solid var(--border);
+      margin-top: 10px;
+    }
+
+    .score-panel {
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 16px;
+      background-color: var(--button);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      margin: 5px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #controls {
+      margin-top: 10px;
+      text-align: left;
+    }
+
+    #mobileControls {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .arrow {
+      width: 50px;
+      height: 50px;
+      margin: 5px;
+      font-size: 24px;
+      border-radius: 50%;
+    }
+
+    @media (max-width: 600px) {
+      #mobileControls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .row {
+        display: flex;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Jogo da Cobrinha</h1>
+
+  <div id="menu">
+    <button onclick="startGame()">Iniciar Jogo</button>
+    <button onclick="toggleTheme()">Alternar Tema</button>
+  </div>
+
+  <div id="gameContainer">
+    <canvas id="game" width="400" height="400"></canvas>
+
+    <div class="score-panel">
+      <strong>Pontuação:</strong> <span id="score">0</span><br/>
+      <strong>Recorde:</strong> <span id="highScore">0</span>
+    </div>
+
+    <button id="restartBtn" onclick="restartGame()">Reiniciar (R)</button>
+
+    <div id="controls">
+      <h3>Controles</h3>
+      <ul>
+        <li>W ou ↑ = Cima</li>
+        <li>S ou ↓ = Baixo</li>
+        <li>A ou ← = Esquerda</li>
+        <li>D ou → = Direita</li>
+        <li>R = Reiniciar</li>
+      </ul>
+    </div>
+
+    <div id="mobileControls">
+      <div class="row">
+        <button class="arrow" onclick="changeDirection('UP')">↑</button>
+      </div>
+      <div class="row">
+        <button class="arrow" onclick="changeDirection('LEFT')">←</button>
+        <button class="arrow" onclick="changeDirection('DOWN')">↓</button>
+        <button class="arrow" onclick="changeDirection('RIGHT')">→</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="eatSound" src="eat.mp3"></audio>
+  <audio id="gameOverSound" src="gameover.mp3"></audio>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreDisplay = document.getElementById("score");
+    const highScoreDisplay = document.getElementById("highScore");
+    const restartBtn = document.getElementById("restartBtn");
+    const eatSound = document.getElementById("eatSound");
+    const gameOverSound = document.getElementById("gameOverSound");
+
+    let box = 20;
+    let snake;
+    let direction;
+    let food;
+    let score;
+    let gameOver = false;
+    let gameLoop;
+    let highScore = localStorage.getItem("snakeHighScore") || 0;
+
+    highScoreDisplay.textContent = highScore;
+
+    function startGame() {
+      document.getElementById("menu").style.display = "none";
+      document.getElementById("gameContainer").style.display = "flex";
+      resetGame();
+      gameLoop = setInterval(draw, 100);
+    }
+
+    function resetGame() {
+      snake = [{x: 160, y: 160}];
+      direction = "RIGHT";
+      food = {
+        x: Math.floor(Math.random() * (canvas.width / box)) * box,
+        y: Math.floor(Math.random() * (canvas.height / box)) * box
+      };
+      score = 0;
+      gameOver = false;
+      scoreDisplay.textContent = score;
+      restartBtn.style.display = "none";
+    }
+
+    function draw() {
+      if (gameOver) return;
+
+      ctx.fillStyle = "#222";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // borda visual
+      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--border");
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+      // comida
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--food");
+      ctx.fillRect(food.x, food.y, box, box);
+
+      // cobra
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--snake");
+      for (let i = 0; i < snake.length; i++) {
+        ctx.fillRect(snake[i].x, snake[i].y, box, box);
+      }
+
+      let head = { x: snake[0].x, y: snake[0].y };
+
+      if (direction === "LEFT") head.x -= box;
+      if (direction === "RIGHT") head.x += box;
+      if (direction === "UP") head.y -= box;
+      if (direction === "DOWN") head.y += box;
+
+      // colisão parede
+      if (
+        head.x < 0 || head.x >= canvas.width ||
+        head.y < 0 || head.y >= canvas.height ||
+        snake.some((segment, index) => index !== 0 && segment.x === head.x && segment.y === head.y)
+      ) {
+        gameOverSound.play();
+        gameOver = true;
+        restartBtn.style.display = "inline-block";
+        clearInterval(gameLoop);
+        return;
+      }
+
+      snake.unshift(head);
+
+      // comer
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        eatSound.play();
+        scoreDisplay.textContent = score;
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("snakeHighScore", highScore);
+          highScoreDisplay.textContent = highScore;
+        }
+        food = {
+          x: Math.floor(Math.random() * (canvas.width / box)) * box,
+          y: Math.floor(Math.random() * (canvas.height / box)) * box
+        };
+      } else {
+        snake.pop();
+      }
+    }
+
+    function changeDirection(dir) {
+      if (dir === "LEFT" && direction !== "RIGHT") direction = "LEFT";
+      if (dir === "RIGHT" && direction !== "LEFT") direction = "RIGHT";
+      if (dir === "UP" && direction !== "DOWN") direction = "UP";
+      if (dir === "DOWN" && direction !== "UP") direction = "DOWN";
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const key = e.key.toLowerCase();
+      if ((key === "a" || e.key === "ArrowLeft") && direction !== "RIGHT") direction = "LEFT";
+      if ((key === "d" || e.key === "ArrowRight") && direction !== "LEFT") direction = "RIGHT";
+      if ((key === "w" || e.key === "ArrowUp") && direction !== "DOWN") direction = "UP";
+      if ((key === "s" || e.key === "ArrowDown") && direction !== "UP") direction = "DOWN";
+      if (key === "r" && gameOver) restartGame();
+    });
+
+    function restartGame() {
+      resetGame();
+      clearInterval(gameLoop);
+      gameLoop = setInterval(draw, 100);
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle("light-mode");
+    }
+  </script>
+</body>
+</html>
